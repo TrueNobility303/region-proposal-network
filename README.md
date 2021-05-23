@@ -16,3 +16,6 @@
 
 详见report.pdf
 
+行人检测结果：
+
+![](https://github.com/TrueNobility303/fpn/blob/master/dump/pic.png)
