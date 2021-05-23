@@ -1,0 +1,48 @@
+import torch
+from config import * 
+
+#bbox运算
+def bbox_wh2xy(box1):
+    box2 = torch.zeros(box1.shape).to(device)
+    x,y,w,h = box1[0], box1[1], box1[2], box1[3]
+    box2[0] = x
+    box2[1] = y
+    box2[2] = x + w
+    box2[3] = y + h 
+    return box2
+
+def bbox_iou(box1, box2):
+    #将wh格式的bbox转化为xy两点式
+
+    box1 = bbox_wh2xy(box1)
+    box2 = bbox_wh2xy(box2)
+
+    #使用两点式计算iou
+    b1_x1, b1_y1, b1_x2, b1_y2 = box1[0], box1[1], box1[2], box1[3]
+    b2_x1, b2_y1, b2_x2, b2_y2 = box2[0], box2[1], box2[2], box2[3]
+
+    inter_rect_x1 = torch.max(b1_x1, b2_x1)
+    inter_rect_y1 = torch.max(b1_y1, b2_y1)
+    inter_rect_x2 = torch.min(b1_x2, b2_x2)
+    inter_rect_y2 = torch.min(b1_y2, b2_y2)
+
+    inter_area = torch.max(inter_rect_x2 - inter_rect_x1, torch.zeros(inter_rect_x2.shape).to(device)) * torch.max(
+        inter_rect_y2 - inter_rect_y1, torch.zeros(inter_rect_x2.shape).to(device))
+
+    b1_area = (b1_x2 - b1_x1) * (b1_y2 - b1_y1)
+    b2_area = (b2_x2 - b2_x1) * (b2_y2 - b2_y1)
+    iou = inter_area / (b1_area + b2_area - inter_area)
+    
+    return iou
+
+#nms 使用 keep = torchvision.ops.nms(boxes, scores, iou_threshold)
+
+
+if __name__ == '__main__':
+    a = torch.Tensor([1,1,2,2]).to(device) 
+    b = torch.Tensor([2,2,2,2]).to(device) 
+    iou = bbox_iou(a,b)
+    print(iou)
+    
+    #b = bbox_xy2wh(a)
+    #b = bbox_wh2ct(b)

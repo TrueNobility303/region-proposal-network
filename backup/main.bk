@@ -1,0 +1,175 @@
+import torch
+import torch.nn as nn
+import torchvision.models as tvmodel
+from torchsummary import summary 
+from model import YOLONET
+from config import * 
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from data import myCityscapes
+from data import jsonTransform
+import tqdm 
+from utils import bbox_iou
+from data import show_bboxes_img
+
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+class Detector():
+    def __init__(self):
+        super().__init__()
+        self.lr = 1e-4
+        self.epoches = 10
+        self.model = YOLONET().to(device)
+        self.optimizer = torch.optim.Adam(self.model.parameters(),lr=self.lr)
+        self.critirion = nn.MSELoss()
+        self.boxloss_weight = 1
+        self.clsloss_weight = 1
+        self.confident_weight = 0
+
+    def train(self,dataloader,validloader):
+        for e in range(self.epoches):
+            #print(len(dataloader)) 8*372
+            tot_clsloss = 0
+            tot_boxloss = 0
+            tot_confidentloss = 0
+            tot_loss = 0 
+
+            for i, data in tqdm.tqdm(enumerate(dataloader)):
+                if i>100:
+                    break
+            
+                img,target = data 
+                bboxes,clses = target
+                
+                img = img.to(device)
+                bboxes = bboxes.to(device)
+                clses = clses.to(device)
+
+                boxpred,clspred = self.model(img)
+
+                clsloss, confidentloss, boxloss = self.calculate_loss(boxpred,clspred, bboxes, clses)
+                loss = clsloss + confidentloss + boxloss  
+
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                
+                tot_loss += loss.item()
+                tot_boxloss += boxloss.item()
+                tot_clsloss += clsloss.item()
+                tot_confidentloss += confidentloss.item()
+
+            print('epoch:',e, 'tot_loss:',tot_loss, 'clsloss:', tot_clsloss, 'boxloss:',tot_boxloss, 'confi_loss:',tot_confidentloss)
+            self.gererate(dataloader, 'dump/ger' + str(e) + '.png') 
+            self.test(dataloader, 'dump/data' + str(e) + '.png')
+
+    def calculate_loss(self,boxpred,clspred,bboxes,clses):
+        boxloss = 0
+        confidentloss = 0
+        batch_size = boxpred.shape[0]
+        for b in range(batch_size):
+            for gridx in range(NUMGRID):
+                for gridy in range(NUMGRID):
+                    cl = clses[b,gridx,gridy,0]
+                    if cl.bool() == 0:
+                        continue
+                    pbox = boxpred[b,gridx,gridy]
+                    tbox = bboxes[b,gridx,gridy,0]
+
+                    maxxiou = 0
+                    maxbox = None
+                    for abox in pbox:
+                        iou = bbox_iou(abox, tbox)
+                        if iou >= maxxiou:
+                            maxxiou = iou
+                            maxbox = abox
+                    boxloss += self.critirion(maxbox,tbox)
+
+                    for abox in pbox:
+                        iou = bbox_iou(abox, tbox)
+                        confidentloss += self.critirion(iou,maxxiou)
+                    
+        clsloss = self.critirion(clspred,clses)
+        clsloss = self.clsloss_weight *  clsloss 
+        boxloss = self.boxloss_weight * boxloss / batch_size
+        confidentloss = self.confident_weight * confidentloss / batch_size
+
+        return clsloss, confidentloss, boxloss 
+
+    @torch.no_grad()
+    def gererate(self,dataloader,savepath):
+        for i,data in enumerate(dataloader):
+            if i>0:
+                break 
+            img,target = data 
+            bboxes,clses = target
+            img = img.to(device)
+            bboxes = bboxes.to(device)
+            clses = clses.to(device)
+            boxpred,clspred = self.model(img)
+
+            batch_size = boxpred.shape[0]
+            for b in range(batch_size):
+                for gridx in range(NUMGRID):
+                    for gridy in range(NUMGRID):
+                        cl = clses[b,gridx,gridy,0]
+                        if cl.bool() == 0:
+                            clspred[b,gridx,gridy,0] = 0
+                            clspred[b,gridx,gridy,1] = 0
+                            continue
+                        
+                        pbox1 = boxpred[b,gridx,gridy,0]
+                        pbox2 = boxpred[b,gridx,gridy,1]
+                        tbox = bboxes[b,gridx,gridy,0]
+
+                        iou1 = bbox_iou(pbox1,tbox)
+                        iou2 = bbox_iou(pbox2,tbox)
+
+                        if iou1 > iou2:
+                            clspred[b,gridx,gridy,0] = 1
+                            clspred[b,gridx,gridy,1] = 0
+                        else:
+                            clspred[b,gridx,gridy,0] = 0
+                            clspred[b,gridx,gridy,1] = 1
+                        if iou1 > 0.8:
+                            clspred[b,gridx,gridy,0] = 1
+                        else:
+                            clspred[b,gridx,gridy,0] = 0
+                        if iou2 > 0.8:
+                            clspred[b,gridx,gridy,1] = 1
+                        else:
+                            clspred[b,gridx,gridy,1] = 0
+            show_bboxes_img(img[0], boxpred[0], clspred[0], savepath)
+
+    @torch.no_grad()
+    def test(self,dataloader,savepath):
+        for i,data in enumerate(dataloader):
+            if i>0:
+                break 
+            img,target = data 
+            bboxes,clses = target
+            img = img.to(device)
+            bboxes = bboxes.to(device)
+            clses = clses.to(device)
+            boxpred,clspred = self.model(img)
+
+            clspred = (torch.sign(clspred)+2) // 2
+            
+            show_bboxes_img(img[0], boxpred[0], clspred[0], savepath)
+        
+if __name__ == '__main__':
+    
+    myTransform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(448),
+    ])
+
+    dataset = myCityscapes('./datasets/', split='train', mode='person', target_type='person',transform=myTransform,target_transform=jsonTransform)
+    dataloader = DataLoader(dataset, batch_size=BATCH,shuffle=True,num_workers=0)
+    validset = myCityscapes('./datasets/', split='val', mode='person', target_type='person',transform=myTransform,target_transform=jsonTransform)
+    validloader = DataLoader(dataset, batch_size=BATCH,shuffle=True,num_workers=0)
+
+
+    det = Detector()
+    det.train(dataloader,validloader)
+    
