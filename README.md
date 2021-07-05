@@ -1,8 +1,8 @@
-# fpn
+# rpn
 
 ## 摘要
 
-在cityscapes数据集上用fpn实现行人检测，fpn是二阶段目标检测的第一步。
+在cityscapes数据集上用fpn实现行人检测，rpn是二阶段目标检测的第一步。
 
 ## 文件说明
 
