@@ -1,5 +1,24 @@
 # rpn
 
+## Abstract
+
+Region proposal network(RPN) on pedestrian detection task on Cityscapes dataset.
+
+## Files 
+* data.py codes of dataset
+* model.py codes of rpn
+* config.py the config
+* anchor.py codes of anchor
+* bbox.py condes of boudning boxes and the relevant functions
+
+## Result
+
+You can refer toreport.pdf
+
+Here is the predestrians detected by rpn 
+
+![](https://github.com/TrueNobility303/fpn/blob/master/dump/pic.png)
+
 ## 摘要
 
 在cityscapes数据集上用rpn实现行人检测，rpn是二阶段目标检测的第一步。
