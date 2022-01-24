@@ -13,7 +13,7 @@ Region proposal network(RPN) on pedestrian detection task on Cityscapes dataset.
 
 ## Result
 
-You can refer toreport.pdf
+You can refer to report.pdf for more details.
 
 Here is the predestrians detected by rpn 
 
@@ -31,10 +31,3 @@ Here is the predestrians detected by rpn
 * anchor.py 与anchor相关的函数
 * bbox.py 处理boudningbox相关的函数，如计算交并比等
 
-## 结果展示
-
-详见report.pdf
-
-行人检测结果
-
-![](https://github.com/TrueNobility303/fpn/blob/master/dump/pic.png)
